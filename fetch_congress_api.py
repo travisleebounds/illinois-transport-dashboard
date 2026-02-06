@@ -1,0 +1,143 @@
+#!/usr/bin/env python3
+"""
+Fetch transportation-related bills using OFFICIAL Congress.gov API
+"""
+
+import requests
+import json
+import time
+from datetime import datetime
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
+# =========================
+# CONFIG
+# =========================
+API_KEY = "PASTE_YOUR_API_KEY_HERE"
+
+ILLINOIS_MEMBERS = {
+    "IL-01": {"bioguide": "J000308", "name": "Jonathan Jackson"},
+    "IL-02": {"bioguide": "K000385", "name": "Robin Kelly"},
+    "IL-03": {"bioguide": "R000617", "name": "Delia Ramirez"},
+    "IL-04": {"bioguide": "G000586", "name": "Jesús García"},
+    "IL-05": {"bioguide": "Q000023", "name": "Mike Quigley"},
+    "IL-06": {"bioguide": "C001117", "name": "Sean Casten"},
+    "IL-07": {"bioguide": "D000096", "name": "Danny Davis"},
+    "IL-08": {"bioguide": "K000391", "name": "Raja Krishnamoorthi"},
+    "IL-09": {"bioguide": "S001145", "name": "Jan Schakowsky"},
+    "IL-10": {"bioguide": "S001190", "name": "Brad Schneider"},
+    "IL-11": {"bioguide": "F000454", "name": "Bill Foster"},
+    "IL-12": {"bioguide": "B001295", "name": "Mike Bost"},
+    "IL-13": {"bioguide": "B001316", "name": "Nikki Budzinski"},
+    "IL-14": {"bioguide": "U000040", "name": "Lauren Underwood"},
+    "IL-15": {"bioguide": "M001211", "name": "Mary Miller"},
+    "IL-16": {"bioguide": "L000585", "name": "Darin LaHood"},
+    "IL-17": {"bioguide": "S001224", "name": "Eric Sorensen"},
+    "IL-SEN1": {"bioguide": "D000563", "name": "Dick Durbin"},
+    "IL-SEN2": {"bioguide": "D000622", "name": "Tammy Duckworth"},
+}
+
+# =========================
+# SESSION WITH RETRIES
+# =========================
+session = requests.Session()
+retries = Retry(
+    total=8,
+    connect=8,
+    read=8,
+    status=8,
+    backoff_factor=0.8,
+    status_forcelist=[429, 500, 502, 503, 504],
+    allowed_methods=["GET"],
+    raise_on_status=False,
+)
+adapter = HTTPAdapter(max_retries=retries)
+session.mount("https://", adapter)
+
+# =========================
+# FETCH LOGIC
+# =========================
+def fetch_member_bills(bioguide, name):
+    print(f"\n{name} ({bioguide})...")
+    bills = []
+
+    def process_legislation(endpoint, relationship):
+        url = f"https://api.congress.gov/v3/member/{bioguide}/{endpoint}"
+        params = {"api_key": API_KEY, "format": "json", "limit": 250}
+        r = session.get(url, params=params, timeout=30)
+        r.raise_for_status()
+        data = r.json().get(endpoint.replace("-", ""), [])
+
+        count = 0
+        for bill in data:
+            if bill.get("congress") != 119:
+                continue
+
+            bill_type = (bill.get("type") or "").lower()
+            bill_number = bill.get("number")
+            if not bill_type or not bill_number:
+                continue
+
+            detail_url = f"https://api.congress.gov/v3/bill/119/{bill_type}/{bill_number}"
+            dr = session.get(detail_url, params={"api_key": API_KEY, "format": "json"}, timeout=30)
+            if not dr.ok:
+                continue
+
+            bill_data = dr.json().get("bill", {})
+            subjects = bill_data.get("subjects", {}).get("legislativeSubjects", [])
+            policy = (bill_data.get("policyArea", {}).get("name") or "").lower()
+
+            if "transportation" in policy or any("transportation" in (s.get("name") or "").lower() for s in subjects):
+                bills.append({
+                    "bill_number": f"{bill.get('type')}.{bill_number}",
+                    "title": bill.get("title", "No title"),
+                    "relationship": relationship,
+                    "latest_action": bill_data.get("latestAction", {}).get("text", ""),
+                    "latest_date": bill_data.get("latestAction", {}).get("actionDate", ""),
+                    "url": f"https://www.congress.gov/bill/119th-congress/{bill_type}/{bill_number}",
+                })
+                count += 1
+
+            time.sleep(0.4)
+
+        print(f"  {relationship}: {count}")
+
+    try:
+        process_legislation("sponsored-legislation", "Sponsored")
+        process_legislation("cosponsored-legislation", "Cosponsored")
+    except Exception as e:
+        print("  ERROR:", e)
+
+    return bills
+
+# =========================
+# MAIN
+# =========================
+def main():
+    if not API_KEY or "PASTE" in API_KEY:
+        print("⚠️  API KEY NOT SET")
+        return
+
+    print("=" * 80)
+    print("FETCHING BILLS VIA CONGRESS.GOV API")
+    print("=" * 80)
+
+    all_bills = {}
+    for district, info in ILLINOIS_MEMBERS.items():
+        all_bills[district] = {
+            "member": info["name"],
+            "bills": fetch_member_bills(info["bioguide"], info["name"]),
+        }
+        time.sleep(1)
+
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    out = f"bills_api_{ts}.json"
+    with open(out, "w") as f:
+        json.dump(all_bills, f, indent=2)
+
+    print("\nCOMPLETE")
+    print(f"Saved: {out}")
+    print(f"Total bills: {sum(len(v['bills']) for v in all_bills.values())}")
+
+if __name__ == "__main__":
+    main()

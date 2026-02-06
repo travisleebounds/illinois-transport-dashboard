@@ -1,0 +1,426 @@
+import streamlit as st
+import pandas as pd
+import folium
+from streamlit_folium import folium_static
+from datetime import datetime
+import subprocess
+import os
+import json
+import glob
+
+st.set_page_config(page_title="IDOT Ultimate Dashboard", page_icon="🚗", layout="wide")
+
+st.markdown("""
+<style>
+    .preview-box {
+        background-color: #f0f2f6;
+        padding: 15px;
+        border-radius: 5px;
+        border-left: 4px solid #1f77b4;
+        margin: 10px 0;
+    }
+    .clickable-item {
+        cursor: pointer;
+        padding: 8px;
+        margin: 5px 0;
+        border-radius: 3px;
+        background-color: #ffffff;
+        border: 1px solid #ddd;
+    }
+    .clickable-item:hover {
+        background-color: #e8f4f8;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown('<div style="font-size: 2.5rem; font-weight: 700; color: #1f77b4; text-align: center;">🚗 IDOT Ultimate Dashboard</div>', unsafe_allow_html=True)
+st.markdown("---")
+
+# Load real bill data if available
+def load_real_bills():
+    files = glob.glob("bills_*.json")
+    if files:
+        latest = sorted(files)[-1]
+        with open(latest, 'r') as f:
+            return json.load(f)
+    return {}
+
+real_bills_data = load_real_bills()
+
+# District data with BOUNDARIES
+DISTRICTS = {
+    "IL-01": {
+        "rep": "Jonathan Jackson", "party": "D", "area": "Chicago South Side", 
+        "lat": 41.7276, "lon": -87.6243,
+        "committees": ["Agriculture", "Foreign Affairs"],
+        "boundary": [[41.6447, -87.7105], [41.6447, -87.5241], [41.8085, -87.5241], [41.8085, -87.7105], [41.6447, -87.7105]],
+        "closures": [{"route": "I-94", "location": "95th Street", "type": "Construction", "status": "Active", "lat": 41.7220, "lon": -87.6246, "description": "Bridge deck replacement and lane reconfiguration", "url": "https://www.gettingaroundillinois.com/"}],
+        "grants": [{"program": "RAISE", "amount": 15000000, "project": "Red Line Extension", "lat": 41.7220, "lon": -87.6246, "description": "CTA Red Line extension to 130th Street", "url": "https://www.transportation.gov/RAISEgrants"}]
+    },
+    
+    "IL-02": {
+        "rep": "Robin Kelly", "party": "D", "area": "South suburbs", 
+        "lat": 41.5992, "lon": -87.6772,
+        "committees": ["Energy and Commerce", "Oversight"],
+        "boundary": [[41.4500, -87.8000], [41.4500, -87.5500], [41.6447, -87.5500], [41.6447, -87.8000], [41.4500, -87.8000]],
+        "closures": [{"route": "I-57", "location": "Matteson", "type": "Resurfacing", "status": "Planned", "lat": 41.5039, "lon": -87.7323, "description": "Interstate resurfacing and shoulder widening", "url": "https://idot.illinois.gov/"}],
+        "grants": [{"program": "INFRA", "amount": 12500000, "project": "Lincoln Highway Corridor", "lat": 41.5039, "lon": -87.7323, "description": "Safety and capacity improvements on US-30", "url": "https://www.transportation.gov/INFRAgrants"}]
+    },
+    
+    "IL-03": {
+        "rep": "Delia Ramirez", "party": "D", "area": "Northwest Chicago", 
+        "lat": 41.9208, "lon": -87.8084,
+        "committees": ["Homeland Security", "Oversight"],
+        "boundary": [[41.8500, -87.9500], [41.8500, -87.6500], [41.9900, -87.6500], [41.9900, -87.9500], [41.8500, -87.9500]],
+        "closures": [{"route": "I-90", "location": "Kennedy Expressway", "type": "Bridge repair", "status": "Active", "lat": 41.9742, "lon": -87.9073, "description": "Structural repairs to Kennedy Expressway bridges", "url": "https://www.gettingaroundillinois.com/"}],
+        "grants": [{"program": "CRISI", "amount": 35000000, "project": "Milwaukee District North Line", "lat": 41.9742, "lon": -87.9073, "description": "Metra line capacity and safety upgrades", "url": "https://railroads.dot.gov/grants-loans/crisi"}]
+    },
+    
+    "IL-04": {
+        "rep": "Jesús García", "party": "D", "area": "Southwest Chicago", 
+        "lat": 41.8370, "lon": -87.7446,
+        "committees": ["Financial Services", "Transportation"],
+        "boundary": [[41.7000, -87.8500], [41.7000, -87.6000], [41.9000, -87.6000], [41.9000, -87.8500], [41.7000, -87.8500]],
+        "closures": [{"route": "Cicero Ave", "location": "26th Street", "type": "Complete streets", "status": "Design", "lat": 41.8370, "lon": -87.7446, "description": "Complete streets redesign with transit priority lanes", "url": "https://www.chicago.gov/"}],
+        "grants": [{"program": "RAISE", "amount": 18000000, "project": "Cicero Multimodal Corridor", "lat": 41.8370, "lon": -87.7446, "description": "Multimodal improvements on Cicero Avenue", "url": "https://www.transportation.gov/RAISEgrants"}]
+    },
+    
+    "IL-05": {
+        "rep": "Mike Quigley", "party": "D", "area": "North Chicago", 
+        "lat": 41.9534, "lon": -87.6981,
+        "committees": ["Appropriations", "Intelligence"],
+        "boundary": [[41.9000, -87.8000], [41.9000, -87.6000], [42.0500, -87.6000], [42.0500, -87.8000], [41.9000, -87.8000]],
+        "closures": [], "grants": []
+    },
+    
+    "IL-06": {
+        "rep": "Sean Casten", "party": "D", "area": "Western suburbs", 
+        "lat": 41.8256, "lon": -88.0814,
+        "committees": ["Financial Services", "Science"],
+        "boundary": [[41.7000, -88.3000], [41.7000, -87.9000], [41.9500, -87.9000], [41.9500, -88.3000], [41.7000, -88.3000]],
+        "closures": [], "grants": []
+    },
+    
+    "IL-07": {
+        "rep": "Danny Davis", "party": "D", "area": "West Chicago", 
+        "lat": 41.8781, "lon": -87.6298,
+        "committees": ["Ways and Means"],
+        "boundary": [[41.8000, -87.7500], [41.8000, -87.5500], [41.9500, -87.5500], [41.9500, -87.7500], [41.8000, -87.7500]],
+        "closures": [], "grants": []
+    },
+    
+    "IL-08": {
+        "rep": "Raja Krishnamoorthi", "party": "D", "area": "Northwest suburbs", 
+        "lat": 42.0883, "lon": -88.1357,
+        "committees": ["Oversight", "Intelligence"],
+        "boundary": [[42.0000, -88.4000], [42.0000, -87.9000], [42.2500, -87.9000], [42.2500, -88.4000], [42.0000, -88.4000]],
+        "closures": [], "grants": []
+    },
+    
+    "IL-09": {
+        "rep": "Jan Schakowsky", "party": "D", "area": "North suburbs", 
+        "lat": 42.0450, "lon": -87.6877,
+        "committees": ["Energy and Commerce", "Budget"],
+        "boundary": [[42.0000, -87.8500], [42.0000, -87.5500], [42.2000, -87.5500], [42.2000, -87.8500], [42.0000, -87.8500]],
+        "closures": [], "grants": []
+    },
+    
+    "IL-10": {
+        "rep": "Brad Schneider", "party": "D", "area": "Lake County", 
+        "lat": 42.3369, "lon": -87.8658,
+        "committees": ["Ways and Means", "Foreign Affairs"],
+        "boundary": [[42.1500, -88.2000], [42.1500, -87.6500], [42.5000, -87.6500], [42.5000, -88.2000], [42.1500, -88.2000]],
+        "closures": [], "grants": []
+    },
+    
+    "IL-11": {
+        "rep": "Bill Foster", "party": "D", "area": "Aurora/Joliet", 
+        "lat": 41.5253, "lon": -88.1473,
+        "committees": ["Financial Services", "Science"],
+        "boundary": [[41.3500, -88.5000], [41.3500, -87.8500], [41.7000, -87.8500], [41.7000, -88.5000], [41.3500, -88.5000]],
+        "closures": [{"route": "I-80", "location": "Joliet", "type": "Freight facility", "status": "Construction", "lat": 41.5250, "lon": -88.0817, "description": "Grade separations and access improvements for intermodal facility", "url": "https://www.transportation.gov/INFRAgrants"}],
+        "grants": [{"program": "INFRA", "amount": 45000000, "project": "I-80 Intermodal Access", "lat": 41.5250, "lon": -88.0817, "description": "Freight corridor improvements and intermodal connections", "url": "https://www.transportation.gov/INFRAgrants"}]
+    },
+    
+    "IL-12": {
+        "rep": "Mike Bost", "party": "R", "area": "Southern Illinois", 
+        "lat": 38.1406, "lon": -89.2645,
+        "committees": ["Transportation", "Veterans Affairs"],
+        "boundary": [[37.0000, -90.5000], [37.0000, -88.0000], [38.5000, -88.0000], [38.5000, -90.5000], [37.0000, -90.5000]],
+        "closures": [],
+        "grants": [{"program": "RAISE", "amount": 22000000, "project": "MetroLink Eastside Center", "lat": 38.6247, "lon": -90.1848, "description": "New transit center with parking and bus connections", "url": "https://www.transportation.gov/RAISEgrants"}]
+    },
+    
+    "IL-13": {
+        "rep": "Nikki Budzinski", "party": "D", "area": "Central Illinois", 
+        "lat": 39.8403, "lon": -88.9548,
+        "committees": ["Agriculture", "Transportation"],
+        "boundary": [[39.5000, -89.5000], [39.5000, -88.0000], [40.3000, -88.0000], [40.3000, -89.5000], [39.5000, -89.5000]],
+        "closures": [
+            {"route": "US-36", "location": "Decatur-Springfield", "type": "Bridge replacement", "status": "Active", "lat": 39.8403, "lon": -89.6515, "description": "Full bridge replacement on US-36 corridor", "url": "https://idot.illinois.gov/"},
+            {"route": "IL-29", "location": "Macon County", "type": "Resurfacing", "status": "Active", "lat": 39.9064, "lon": -88.9548, "description": "Resurfacing and shoulder improvements", "url": "https://idot.illinois.gov/"}
+        ],
+        "grants": [
+            {"program": "RAISE", "amount": 15000000, "project": "Decatur Multi-Modal Center", "lat": 39.8403, "lon": -89.6515, "description": "Intermodal facility connecting Amtrak, bus, and bike infrastructure", "url": "https://www.transportation.gov/RAISEgrants"},
+            {"program": "INFRA", "amount": 25000000, "project": "I-72 Freight Corridor", "lat": 39.9064, "lon": -88.6548, "description": "Highway improvements for agricultural freight movement", "url": "https://www.transportation.gov/INFRAgrants"}
+        ]
+    },
+    
+    "IL-14": {
+        "rep": "Lauren Underwood", "party": "D", "area": "Far west suburbs", 
+        "lat": 41.7606, "lon": -88.5855,
+        "committees": ["Appropriations", "Veterans Affairs"],
+        "boundary": [[41.5000, -88.9000], [41.5000, -88.3000], [41.9500, -88.3000], [41.9500, -88.9000], [41.5000, -88.9000]],
+        "closures": [], "grants": []
+    },
+    
+    "IL-15": {
+        "rep": "Mary Miller", "party": "R", "area": "Eastern Illinois", 
+        "lat": 40.1164, "lon": -88.2434,
+        "committees": ["Agriculture", "Education"],
+        "boundary": [[39.0000, -88.5000], [39.0000, -87.5000], [40.5000, -87.5000], [40.5000, -88.5000], [39.0000, -88.5000]],
+        "closures": [], "grants": []
+    },
+    
+    "IL-16": {
+        "rep": "Darin LaHood", "party": "R", "area": "Peoria/Rockford", 
+        "lat": 40.6936, "lon": -89.5890,
+        "committees": ["Ways and Means"],
+        "boundary": [[40.3000, -90.5000], [40.3000, -89.0000], [42.0000, -89.0000], [42.0000, -90.5000], [40.3000, -90.5000]],
+        "closures": [],
+        "grants": [{"program": "RAISE", "amount": 20000000, "project": "Peoria Warehouse District", "lat": 40.6936, "lon": -89.5890, "description": "Roadway and river port access improvements", "url": "https://www.transportation.gov/RAISEgrants"}]
+    },
+    
+    "IL-17": {
+        "rep": "Eric Sorensen", "party": "D", "area": "Quad Cities", 
+        "lat": 41.5067, "lon": -90.5151,
+        "committees": ["Agriculture", "Science"],
+        "boundary": [[40.5000, -91.5000], [40.5000, -89.5000], [42.5000, -89.5000], [42.5000, -91.5000], [40.5000, -91.5000]],
+        "closures": [],
+        "grants": [{"program": "Port Infrastructure", "amount": 28000000, "project": "Mississippi River Lock", "lat": 41.5067, "lon": -90.5780, "description": "Port infrastructure and rail access improvements", "url": "https://www.maritime.dot.gov/PIDPgrants"}]
+    },
+}
+
+# Session state
+if 'selected_district' not in st.session_state:
+    st.session_state.selected_district = None
+if 'selected_item' not in st.session_state:
+    st.session_state.selected_item = None
+
+# Navigation
+view = st.radio("Navigation", ["🗺️ Statewide Map", "📍 District View", "🤖 AV Policy"], horizontal=True)
+
+# STATEWIDE MAP
+if view == "🗺️ Statewide Map":
+    st.header("Illinois - All 17 Congressional Districts")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Districts", "17")
+    col2.metric("Democrats", "14")
+    col3.metric("Republicans", "3")
+    total_grants = sum(sum(g['amount'] for g in d.get('grants', [])) for d in DISTRICTS.values())
+    col4.metric("Total Grants", f"${total_grants/1e6:.0f}M")
+    
+    # Create map with ALL district boundaries
+    m = folium.Map(location=[40.0, -89.0], zoom_start=7)
+    
+    for district_id, info in DISTRICTS.items():
+        color = 'blue' if info['party'] == 'D' else 'red'
+        
+        # Add district BOUNDARY polygon
+        folium.Polygon(
+            locations=info['boundary'],
+            color=color,
+            fill=True,
+            fillColor=color,
+            fillOpacity=0.15,
+            weight=2,
+            popup=f"{district_id}: {info['rep']} ({info['party']})"
+        ).add_to(m)
+        
+        # Add district center marker
+        n_closures = len(info.get('closures', []))
+        n_grants = len(info.get('grants', []))
+        grant_total = sum(g['amount'] for g in info.get('grants', []))
+        
+        popup = f"<b>{district_id}: {info['rep']} ({info['party']})</b><br>{info['area']}<br><br>🚧 Closures: {n_closures}<br>💰 Grants: ${grant_total:,}"
+        
+        folium.Marker(
+            [info['lat'], info['lon']],
+            popup=folium.Popup(popup, max_width=300),
+            tooltip=f"{district_id}: {info['rep']}",
+            icon=folium.Icon(color=color, icon='info-sign')
+        ).add_to(m)
+        
+        # Add project markers
+        for closure in info.get('closures', []):
+            folium.CircleMarker([closure['lat'], closure['lon']], radius=6, color='orange', fill=True, popup=f"🚧 {closure['route']}").add_to(m)
+        
+        for grant in info.get('grants', []):
+            folium.CircleMarker([grant['lat'], grant['lon']], radius=8, color='green', fill=True, popup=f"💰 ${grant['amount']:,}").add_to(m)
+    
+    folium_static(m, width=1400, height=600)
+    
+    st.markdown("---")
+    st.subheader("Click a District")
+    
+    cols = st.columns(6)
+    for idx, district_id in enumerate(sorted(DISTRICTS.keys())):
+        info = DISTRICTS[district_id]
+        if cols[idx % 6].button(f"{district_id}\n{info['rep'][:15]}", key=f"btn_{district_id}"):
+            st.session_state.selected_district = district_id
+            st.rerun()
+
+# DISTRICT VIEW
+elif view == "📍 District View":
+    st.sidebar.title("Select District")
+    for district_id in sorted(DISTRICTS.keys()):
+        info = DISTRICTS[district_id]
+        if st.sidebar.button(f"{district_id}: {info['rep']}", key=f"side_{district_id}", use_container_width=True):
+            st.session_state.selected_district = district_id
+            st.session_state.selected_item = None
+    
+    if st.session_state.selected_district:
+        district = st.session_state.selected_district
+        info = DISTRICTS[district]
+        
+        st.header(f"{district}: {info['rep']} ({info['party']})")
+        st.markdown(f"**Area:** {info['area']}")
+        st.markdown(f"**Committees:** {', '.join(info['committees'])}")
+        
+        # Get real bills if available
+        district_bills = real_bills_data.get(district, {}).get('bills', [])
+        
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Closures", len(info.get('closures', [])))
+        col2.metric("Grants", f"${sum(g['amount'] for g in info.get('grants', []))/1e6:.1f}M")
+        col3.metric("Bills", len(district_bills))
+        
+        st.markdown("---")
+        
+        # District map WITH BOUNDARY
+        dm = folium.Map(location=[info['lat'], info['lon']], zoom_start=10)
+        
+        # Add boundary polygon
+        color = 'blue' if info['party'] == 'D' else 'red'
+        folium.Polygon(
+            locations=info['boundary'],
+            color=color,
+            fill=True,
+            fillColor=color,
+            fillOpacity=0.2,
+            weight=3,
+            popup=f"{district} Boundary"
+        ).add_to(dm)
+        
+        # Add markers
+        for closure in info.get('closures', []):
+            folium.Marker([closure['lat'], closure['lon']], icon=folium.Icon(color='orange', icon='road', prefix='fa'), popup=f"🚧 {closure['route']}").add_to(dm)
+        
+        for grant in info.get('grants', []):
+            folium.Marker([grant['lat'], grant['lon']], icon=folium.Icon(color='green', icon='dollar', prefix='fa'), popup=f"💰 ${grant['amount']:,}").add_to(dm)
+        
+        folium_static(dm, width=1400, height=500)
+        
+        st.markdown("---")
+        
+        # Tabs with CLICKABLE items
+        tab1, tab2, tab3 = st.tabs(["🚧 Closures", "💰 Grants", "📜 Legislation"])
+        
+        with tab1:
+            if info.get('closures'):
+                st.markdown("**Click any item for details:**")
+                for idx, closure in enumerate(info['closures']):
+                    if st.button(f"🚧 {closure['route']} - {closure['location']} ({closure['status']})", key=f"closure_{idx}", use_container_width=True):
+                        st.session_state.selected_item = ('closure', idx)
+                
+                # Preview box
+                if st.session_state.selected_item and st.session_state.selected_item[0] == 'closure':
+                    idx = st.session_state.selected_item[1]
+                    c = info['closures'][idx]
+                    st.markdown(f"""
+                    <div class="preview-box">
+                        <h4>🚧 {c['route']} - {c['location']}</h4>
+                        <p><strong>Type:</strong> {c['type']}</p>
+                        <p><strong>Status:</strong> {c['status']}</p>
+                        <p><strong>Description:</strong> {c['description']}</p>
+                        <p><a href="{c['url']}" target="_blank">🔗 View Source</a></p>
+                    </div>
+                    """, unsafe_allow_html=True)
+            else:
+                st.info("No active closures")
+        
+        with tab2:
+            if info.get('grants'):
+                st.markdown("**Click any item for details:**")
+                for idx, grant in enumerate(info['grants']):
+                    if st.button(f"💰 {grant['program']}: ${grant['amount']:,} - {grant['project']}", key=f"grant_{idx}", use_container_width=True):
+                        st.session_state.selected_item = ('grant', idx)
+                
+                # Preview box
+                if st.session_state.selected_item and st.session_state.selected_item[0] == 'grant':
+                    idx = st.session_state.selected_item[1]
+                    g = info['grants'][idx]
+                    st.markdown(f"""
+                    <div class="preview-box">
+                        <h4>💰 {g['program']}: ${g['amount']:,}</h4>
+                        <p><strong>Project:</strong> {g['project']}</p>
+                        <p><strong>Description:</strong> {g['description']}</p>
+                        <p><a href="{g['url']}" target="_blank">🔗 View Program Details</a></p>
+                    </div>
+                    """, unsafe_allow_html=True)
+            else:
+                st.info("No grants")
+        
+        with tab3:
+            if district_bills:
+                st.markdown("**Click any item for details:**")
+                for idx, bill in enumerate(district_bills[:20]):  # Show first 20
+                    if st.button(f"📜 {bill.get('number', 'N/A')} - {bill.get('title', 'No title')[:80]}...", key=f"bill_{idx}", use_container_width=True):
+                        st.session_state.selected_item = ('bill', idx)
+                
+                # Preview box
+                if st.session_state.selected_item and st.session_state.selected_item[0] == 'bill':
+                    idx = st.session_state.selected_item[1]
+                    b = district_bills[idx]
+                    bill_url = b.get('url', f"https://www.congress.gov/search?q={b.get('number', '')}")
+                    st.markdown(f"""
+                    <div class="preview-box">
+                        <h4>📜 {b.get('number', 'N/A')}</h4>
+                        <p><strong>Title:</strong> {b.get('title', 'No title')}</p>
+                        <p><strong>Relationship:</strong> {b.get('relationship', 'Unknown')}</p>
+                        <p><a href="{bill_url}" target="_blank">🔗 View on Congress.gov</a></p>
+                    </div>
+                    """, unsafe_allow_html=True)
+            else:
+                st.info("No bills tracked (run get_bills.py to fetch)")
+    else:
+        st.info("👈 Select a district")
+
+# AV POLICY
+elif view == "🤖 AV Policy":
+    st.header("AV Policy Goblin")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Comprehensive Laws", "8")
+    col2.metric("Pending Bills", "3")
+    col3.metric("Permissive States", "2")
+    col4.metric("No Activity", "23")
+    
+    st.markdown("---")
+    
+    with st.expander("⭐ Option B: Pilot Program (RECOMMENDED)", expanded=True):
+        st.write("**Chicago-based pilot with 2-3 year evaluation**")
+        st.write("✅ Test-and-learn | ✅ Build trust | ✅ Flexible")
+        st.success("Staff recommendation for Illinois")
+    
+    with st.expander("Option A: Comprehensive Framework"):
+        st.write("**Full regulatory system like California**")
+        st.write("✅ Safety standards | ⚠️ Resource intensive")
+    
+    with st.expander("⚠️ Option C: Status Quo (NOT RECOMMENDED)"):
+        st.write("**Minimal regulation (Arizona model)**")
+        st.error("This is what Waymo is lobbying for")
+
+st.markdown("---")
+st.markdown(f"<div style='text-align: center; color: #666;'>IDOT | {datetime.now().strftime('%B %d, %Y')}</div>", unsafe_allow_html=True)
