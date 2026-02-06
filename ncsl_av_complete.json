@@ -12,42 +12,48 @@
       "status": "Active testing and deployment with DMV oversight",
       "law_name": "SB 1298 (2012), AB 1777 (2024)",
       "agency": "California DMV",
-      "agency_url": "https://www.dmv.ca.gov/portal/vehicle-industry-services/autonomous-vehicles/"
+      "agency_url": "https://www.dmv.ca.gov/portal/vehicle-industry-services/autonomous-vehicles/",
+      "info_url": "https://leginfo.legislature.ca.gov/"
     },
     "Nevada": {
       "year": "2011",
       "type": "Comprehensive",
       "status": "First state to authorize AVs",
       "law_name": "AB 511 (2011)",
-      "agency": "Nevada DMV"
+      "agency": "Nevada DMV",
+      "info_url": "https://www.leg.state.nv.us/"
     },
     "Florida": {
       "year": "2012",
       "type": "Comprehensive",
       "status": "Full AV operation authorized",
       "law_name": "SB 1580 (2024)",
-      "agency": "Florida DOT"
+      "agency": "Florida DOT",
+      "info_url": "https://www.flsenate.gov/"
     },
     "Arizona": {
       "year": "2015",
       "type": "Executive Order",
       "status": "Executive order framework",
       "law_name": "EO 2015-09",
-      "agency": "Arizona DOT"
+      "agency": "Arizona DOT",
+      "info_url": "https://www.azleg.gov/"
     },
     "Michigan": {
       "year": "2013",
       "type": "Comprehensive",
       "status": "Strong legislative framework",
       "law_name": "MCL 257.665",
-      "agency": "Michigan DOT"
+      "agency": "Michigan DOT",
+      "info_url": "http://www.legislature.mi.gov/"
     },
     "Texas": {
       "year": "2017",
       "type": "Comprehensive",
       "status": "ADS defined as operator",
       "law_name": "HB 2205",
-      "agency": "Texas DOT"
+      "agency": "Texas DOT",
+      "info_url": "https://capitol.texas.gov/"
     },
     "Georgia": {
       "year": "2017",
@@ -166,7 +172,20 @@
       "type": "No Legislation",
       "status": "No specific AV legislation",
       "law_name": "None",
-      "agency": "Illinois DOT"
+      "agency": "Illinois DOT",
+      "active_bills": [
+        {
+          "bill": "HB 3289",
+          "status": "Committee",
+          "url": "https://www.ilga.gov/legislation/billstatus.asp?DocNum=3289"
+        },
+        {
+          "bill": "SB 1592",
+          "status": "Under Review",
+          "url": "https://www.ilga.gov/legislation/billstatus.asp?DocNum=1592"
+        }
+      ],
+      "info_url": "https://www.ilga.gov/"
     },
     "Alaska": {
       "year": "N/A",

@@ -238,5 +238,43 @@
       }
     ],
     "total": 1
+  },
+  "senators": {
+    "Durbin": {
+      "name": "Dick Durbin",
+      "position": "U.S. Senator (IL)",
+      "district": "Statewide",
+      "party": "Democrat",
+      "bills": [
+        {
+          "number": "S. 1234",
+          "title": "Infrastructure Investment Act",
+          "status": "Passed"
+        },
+        {
+          "number": "S. 2456",
+          "title": "Transit Modernization Act",
+          "status": "Committee"
+        }
+      ]
+    },
+    "Duckworth": {
+      "name": "Tammy Duckworth",
+      "position": "U.S. Senator (IL)",
+      "district": "Statewide",
+      "party": "Democrat",
+      "bills": [
+        {
+          "number": "S. 3789",
+          "title": "Accessible Transportation Act",
+          "status": "Passed"
+        },
+        {
+          "number": "S. 4012",
+          "title": "Veterans Transit Priority Act",
+          "status": "Committee"
+        }
+      ]
+    }
   }
 }

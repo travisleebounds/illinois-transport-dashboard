@@ -1,5 +1,6 @@
 import re
 import streamlit as st
+st.set_page_config(page_title="Illinois Transportation Dashboard", page_icon="🔱")
 import pandas as pd
 import folium
 from streamlit_folium import folium_static
@@ -1604,7 +1605,9 @@ elif view == "💎 Discretionary Grants":
         st.subheader("All Grants Detail")
         
         grants_list = []
-        for grant in grants_data['grants']:
+        # Show ALL grants including 2020-2022
+        all_grants = sorted(grants_data['grants'], key=lambda x: x['year'], reverse=True)
+        for grant in all_grants:
             grants_list.append({
                 'Year': grant['year'],
                 'Program': grant['program'],
